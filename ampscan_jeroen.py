@@ -97,7 +97,7 @@ class customalign(object):
         sv = fC[idx, :]
         
         for i in range(1,maxiter):
-            [R, T] = getattr(self, 'optPoint2Point')(mv, sv)
+            [R, T] = getattr(self, 'optPoint2Point')(mv, kdTree)
             print(R)
             print(T)
             Rs[:, :, i+1] = np.dot(R, Rs[:, :, i])
@@ -120,15 +120,15 @@ class customalign(object):
         print(self.rmse)
     
     def initialize(self):
-        noseindex = np.argmax(self.m.vert[:,2])
+        noseindex = np.argmax(self.s.vert[:,2])
         deltax = np.max(self.s.vert[:,0]) - np.max(self.m.vert[:,0])
-        deltay = np.max(self.s.vert[:,1]) - self.m.vert[noseindex,1] - 40
-        deltaz = np.mean(self.s.vert[:,2]) - self.m.vert[noseindex,2] + 20
+        deltay = self.s.vert[noseindex,1] - np.max(self.m.vert[:,1]) + 40
+        deltaz = self.s.vert[noseindex,2] - np.mean(self.m.vert[:,2]) - 20
         
         self.m.translate([deltax, deltay, deltaz])
     
     @staticmethod
-    def optPoint2Point(mv, sv, opt='L-BFGS-B'):
+    def optPoint2Point(mv, kdTree, opt='L-BFGS-B'):
         r"""
         Direct minimisation of the rmse between the points of the two meshes. This 
         method enables access to all of Scipy's minimisation algorithms 
@@ -202,7 +202,7 @@ class customalign(object):
         #     print(err)
         #     print('errorstd:')
         #     print(errstd)
-        X = brute(customalign.optDistError, limpre, args=(mv, sv, 'err'), Ns=Ns, 
+        X = brute(customalign.optDistError, limpre, args=(mv, kdTree, 'err'), Ns=Ns, 
                   full_output=True, finish=None, disp=True)
         print('brute done')
         print(X[0])
@@ -220,16 +220,16 @@ class customalign(object):
         
         std = np.zeros(k)
         for i in range(0,k-1):
-            std[i] = customalign.optDistError(X[1:,Xindex[i]], mv, sv, 'std')
+            std[i] = customalign.optDistError(X[1:,Xindex[i]], mv, kdTree, 'std')
         minstd = np.argmin(std)
         
         # Xfinal = minimize(customalign.optDistErrorerr, X[1:,Xindex[minstd]],
         #              args=(mv, sv), bounds=limpost, method=opt, 
         #              options={'disp':True})
         Xfinal = minimize(customalign.optDistError, X[1:,Xindex[minstd]],
-                      args=(mv, sv, 'err'), method='Nelder-Mead', 
+                      args=(mv, kdTree, 'err'), method=opt, bounds=limpost,
                       options={'disp':True})
-        [err, errstd] = customalign.optDistError(Xfinal.x, mv, sv, 'end')
+        [err, errstd] = customalign.optDistError(Xfinal.x, mv, kdTree, 'end')
         print(Xfinal)
         print([err, errstd])
         # print(X2)
@@ -264,7 +264,7 @@ class customalign(object):
         return (R, T)
     
     @staticmethod
-    def optDistError(X, mv, sv, out='err'):
+    def optDistError(X, mv, kdTree, out='err'):
         r"""
         The function to minimise. It performs the affine transformation then returns 
         the rmse between the two vertex sets
@@ -302,30 +302,19 @@ class customalign(object):
         moved = np.dot(mv, R.T)
         moved = moved + np.array([0, X[1], X[2]])
         
-        coor = np.zeros((len(sv[:,0]),np.size(moved,0),3))
-        dist = np.zeros((len(sv[:,0]),np.size(moved,0)))
-        for i in range(np.size(coor,0)):
-            coor[i,:,0] = sv[i,0]*np.ones((1,np.size(moved,0)))
-            coor[i,:,1] = sv[i,1]*np.ones((1,np.size(moved,0)))
-            coor[i,:,2] = sv[i,2]*np.ones((1,np.size(moved,0)))
-        dist = np.linalg.norm(coor[:,:,:] - moved[:,:], axis=2)
-        # dist = np.sqrt(np.sum(np.power(coor[:,:,:] - moved[:,:],2),axis=2))
-        err = np.amin(dist, axis=1)
-        errstd = np.std(err)
-        err = np.mean(err)
-        # err = np.mean(min(np.sqrt(np.sum([xdist, ydist, zdist], axis=1))))
-        
-        # err = np.zeros(np.size(sv,0))
-        
-        # for i in range(np.size(sv,0)):
-        #     svi = np.ones((np.size(moved,0),np.size(moved,1)))*sv[i,:]
-        #     err[i] = min(np.sqrt(np.sum(np.power((svi-moved),2),axis=1)))
-                    
-        # err = np.mean(err)
-        
-        # dist = (sv - moved)**2
-        # dist = dist.sum(axis=1)
-        # err = np.sqrt(dist.mean())
+        [dist, idx] = kdTree.query(moved, 1)
+        dist = np.absolute(dist)
+        # print(dist)
+        # coor = np.zeros((len(sv[:,0]),np.size(moved,0),3))
+        # dist = np.zeros((len(sv[:,0]),np.size(moved,0)))
+        # for i in range(np.size(coor,0)):
+        #     coor[i,:,0] = sv[i,0]*np.ones((1,np.size(moved,0)))
+        #     coor[i,:,1] = sv[i,1]*np.ones((1,np.size(moved,0)))
+        #     coor[i,:,2] = sv[i,2]*np.ones((1,np.size(moved,0)))
+        # dist = np.linalg.norm(coor[:,:,:] - moved[:,:], axis=2)
+        errstd = np.std(dist)
+        err = np.mean(dist)
+
         if out == 'err':
             print('error:')
             print(err)

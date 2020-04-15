@@ -30,9 +30,9 @@ for i in range(len(masklist)):
 masklist = temp
 
 for i in range(len(masklist)):
-    base = AmpObject(os.getcwd()+'\masks\\'+masklist[i])
+    target = AmpObject(os.getcwd()+'\masks\\'+masklist[i])
     for j in range(len(inputlist)):
-        target = AmpObject(os.getcwd()+'\input\\'+inputlist[j])
+        base = AmpObject(os.getcwd()+'\input\\'+inputlist[j])
         alignedobjects = ampscan_jeroen.customalign(base, target)
                 
         alignedobjects.m.save(os.getcwd()+'\output\mask_'+masklist[i][:-4]+'_input_'+inputlist[j])

@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Spyder Editor
-
-This is a temporary script file.
-"""
 
 from ampscan import AmpObject, align, registration, vis
 import matplotlib.pyplot as plt
@@ -13,8 +8,8 @@ import os
 import math
 from scipy import spatial
 from scipy.optimize import minimize
-import custom_align
-import custom_registration
+import custom_align as c_al
+import custom_registration as c_reg
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -34,6 +29,6 @@ for i in range(len(masklist)):
     target = AmpObject(os.getcwd()+'\masks\\'+masklist[i])
     for j in range(len(inputlist)):
         base = AmpObject(os.getcwd()+'\input\\'+inputlist[j])
-        alignedobjects = custom_align.customalign(base, target)
+        alignedobjects = c_al.customalign(base, target)
                 
         alignedobjects.m.save(os.getcwd()+'\output\mask_'+masklist[i][:-4]+'_input_'+inputlist[j])

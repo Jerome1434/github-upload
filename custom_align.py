@@ -5,7 +5,6 @@ Created on Mon Mar 30 13:07:41 2020
 @author: s144339
 """
 
-import csv
 import numpy as np
 import math
 import vtk
@@ -49,16 +48,32 @@ class customalign(object):
 
     """    
     
-    def __init__(self, base, target):
-        mData = dict(zip(['vert', 'faces', 'values'], [target.vert, target.faces, target.values]))
+    def __init__(self, base, target, method='best-fit'):
+        '''
+        base : 
+            the base object, which is static
+        target : 
+            the target object, which will be moved. 
+        
+        The error will be calculated based on all values for the minimum 
+        distance between one base vertex(face centroid) and all target vertices.
+        
+        method : 
+            the method distinguishes between a best-fit algorithm and a 
+            best-fit algorithm including that the whole mask is located inside
+            the face, to be able to calculate the max. distance
+            'best-fit' for the standard best-fit algorithm
+            'max-dist' for the max. distance best-fit algorithm
+        '''
+        mData = dict(zip(['vert', 'faces', 'values'], 
+                         [target.vert, target.faces, target.values]))
         alData = copy.deepcopy(mData)
         self.m = AmpObject(alData, stype='reg')
         self.s = base
         self.initialize()
+        self.runcustomICP(maxiter=2, inlier=1.0, initTransform=None, method=method)
         
-        self.runcustomICP(maxiter=2, inlier=1.0, initTransform=None)
-        
-    def runcustomICP(self, maxiter=20, inlier=1.0, initTransform=None):
+    def runcustomICP(self, maxiter=20, inlier=1.0, initTransform=None, method='best-fit'):
         #copied from runICP
         # Define the rotation, translation, error and quaterion arrays
         Rs = np.zeros([3, 3, maxiter+1])
@@ -77,6 +92,7 @@ class customalign(object):
         # Define 
         fC = self.s.vert[self.s.faces].mean(axis=1)
         kdTree = spatial.cKDTree(fC)
+        self.s.kdTree = spatial.cKDTree(self.s.vert)
         self.m.rigidTransform(Rs[:, :, 0], Ts[:, 0])
         inlier = math.ceil(self.m.vert.shape[0]*inlier)
         [dist, idx] = kdTree.query(self.m.vert, 1)
@@ -88,10 +104,13 @@ class customalign(object):
         err[0] = math.sqrt(dist.mean())
         
         mv = self.m.vert[sort, :]
-        sv = fC[idx, :]
+        # sv = fC[idx, :]
+        
+        self.s.calcVNorm()
         
         for i in range(1,maxiter):
-            [R, T] = getattr(self, 'optPoint2Point')(mv, kdTree)
+            [R, T] = getattr(self, 'optPoint2Point')(mv, kdTree, self.s, 
+                                                     self.m, method=method)
             print(R)
             print(T)
             Rs[:, :, i+1] = np.dot(R, Rs[:, :, i])
@@ -122,7 +141,8 @@ class customalign(object):
         self.m.translate([deltax, deltay, deltaz])
     
     @staticmethod
-    def optPoint2Point(mv, kdTree, opt='L-BFGS-B'):
+    def optPoint2Point(mv, kdTree, static, moving, opt='L-BFGS-B', 
+                       method='best-fit'):
         r"""
         Direct minimisation of the rmse between the points of the two meshes. This 
         method enables access to all of Scipy's minimisation algorithms 
@@ -151,7 +171,6 @@ class customalign(object):
         >>> al = align(moving, static, method='optPoint2Point', opt='SLSQP').m
             
         """
-
         limit = 15  #grid testing limits
         Ns = 5     #number of grid points
         k = 5      #number of grid points chosen to be tested on standard deviation
@@ -162,12 +181,13 @@ class customalign(object):
                   (-limit, limit),
                   (-limit, limit))
         
-        X1 = brute(customalign.optDistError, limpre, args=(mv, kdTree, 'err'),
-                   Ns=Ns, full_output=True, finish=None, disp=True)
+        X1 = brute(customalign.optDistError, limpre, args=(mv, kdTree, 
+                   'err'), Ns=Ns, full_output=True, finish=None, disp=True)
+
         print('brute done')
         print(X1[0])
         print(X1[1])
-        
+        print(customalign.con(X1[0], static, moving))
         # X[2] is all tested variables, access by: X[2][0]
         # X[3] is the output
         Xrotres = np.reshape(X1[2][0],[1,Ns**n])   
@@ -178,7 +198,14 @@ class customalign(object):
         res = np.reshape(X1[3],[1,Ns**n])
         X2 = np.array([res[0,:], Xrotres[0,:], Zrotres[0,:], Xres[0,:], 
                        Yres[0,:], Zres[0,:]])
-
+        idx = []
+        if method == 'max-dist':
+            for i in range(X2.shape[1]):
+                constraint = customalign.con(X2[1:,i], static, moving)
+                if constraint < 0:
+                    idx.append(i)
+            np.delete(X2, idx, axis=0)
+            
         Xindex = np.argpartition(X2[0,:], k)[:k]
         Xfinal = False
         for i in range(k):
@@ -192,9 +219,18 @@ class customalign(object):
                                  X2[4,Xindex[i]] + limit/Ns],
                                 [X2[5,Xindex[i]] - limit/Ns, 
                                  X2[5,Xindex[i]] + limit/Ns]])
-            X3 = minimize(customalign.optDistError, X2[1:,Xindex[i]],
-                                 args=(mv, kdTree, 'err'), method='SLSQP',
-                                 bounds=limpost, options={'disp':True})
+            if method == 'best-fit':
+                X3 = minimize(customalign.optDistError, X2[1:,Xindex[i]],
+                              args=(mv, kdTree, 'err'), method='SLSQP', 
+                              bounds=limpost, options={'disp':True})
+            if method == 'max-dist':
+                X3 = minimize(customalign.optDistError, X2[1:,Xindex[i]],
+                              args=(mv, kdTree, 'err'), method='SLSQP', 
+                              bounds=limpost, 
+                              constraints={'type':'ineq', 
+                              'fun':customalign.con, 'args':(static, moving)}, 
+                              options={'disp':True})
+                print(customalign.con(X3.x, static, moving))
             if Xfinal == False:
                 Xfinal = X3
             else:
@@ -263,7 +299,6 @@ class customalign(object):
         
         [dist, idx] = kdTree.query(moved, 1)
         dist = np.absolute(dist)
-
         errstd = np.std(dist)
         err = np.mean(dist)
 
@@ -278,6 +313,56 @@ class customalign(object):
             print(errstd)
             return [err, errstd]
     
+    @staticmethod
+    def con(X, static, moving):
+        r"""
+        The function to minimise. It performs the affine transformation then returns 
+        the rmse between the two vertex sets
+        
+        Parameters
+        ----------
+        X:  ndarray
+            The affine transformation corresponding to [Rx, Ry, Rz, Tx, Ty, Tz]
+        mv: ndarray
+            The array of vertices to be moved 
+        sv: ndarray
+            The array of static vertices, these are the face centroids of the 
+            static mesh
+        out:string
+            'err', 'std', or 'end'. determines which output is returned
+
+        Returns
+        -------
+        err: float
+            The RMSE between the two meshes
+        
+        """
+        
+        [angx, angy, angz] = np.array([X[0], 0, X[1]])
+        Rx = np.array([[1, 0, 0],
+                        [0, np.cos(angx), -np.sin(angx)],
+                        [0, np.sin(angx), np.cos(angx)]])
+        Ry = np.array([[np.cos(angy), 0, np.sin(angy)],
+                        [0, 1, 0],
+                        [-np.sin(angy), 0, np.cos(angy)]])
+        Rz = np.array([[np.cos(angz), -np.sin(angz), 0],
+                        [np.sin(angz), np.cos(angz), 0],
+                        [0, 0, 1]])
+        R = np.dot(np.dot(Rz, Ry), Rx)
+        moving.vert = np.dot(moving.vert, R.T)
+        moving.vert = moving.vert + np.array([X[2], X[3], X[4]])
+        
+        [dist, idx] = static.kdTree.query(moving.vert, 1)
+        
+        D = static.vert[idx] - moving.vert
+        n = static.vNorm[idx]
+        values = np.linalg.norm(D, axis=1)
+        
+        polarity = np.sum(n*D, axis=1) < 0
+        values[polarity] *= -1.0
+        
+        return -np.max(values)
+        
     def display(self):
         r"""
         Display the static mesh and the aligned within an interactive VTK 

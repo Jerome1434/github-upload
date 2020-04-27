@@ -29,6 +29,6 @@ for i in range(len(masklist)):
     target = AmpObject(os.getcwd()+'\masks\\'+masklist[i])
     for j in range(len(inputlist)):
         base = AmpObject(os.getcwd()+'\input\\'+inputlist[j])
-        alignedobjects = c_al.customalign(base, target)
+        alignedobjects = c_al.customalign(base, target, method='max-dist')
                 
         alignedobjects.m.save(os.getcwd()+'\output\mask_'+masklist[i][:-4]+'_input_'+inputlist[j])

@@ -51,25 +51,31 @@ for i in list(stringdict.keys()):
         stringdict.pop(i)
     elif int(stringdict[i]['age']) < 18:
         stringdict.pop(i)
+    elif stringdict[i]['declaredethnicGroup'] != 'white british':
+        stringdict.pop(i)
 
 gender = Counter()
 agecat = Counter()
-ethnicity = Counter()
+age_gendercat = Counter()
 idlist = list()
 
 for i in stringdict.keys():
     idlist.append([stringdict[i]['id'], stringdict[i]['gender'], 
-                   stringdict[i]['age'], stringdict[i]['declaredethnicGroup']])
-    if int(stringdict[i]['age']) < 35:
-        agecat['young (18 <= age <= 34)'] += 1
-    elif (int(stringdict[i]['age']) >= 35 and
-          int(stringdict[i]['age']) < 44):
-        agecat['lower-middle-aged (35 <= age <= 43)'] += 1
-    elif (int(stringdict[i]['age']) >= 44 and
-          int(stringdict[i]['age']) < 65):
-        agecat['upper-middle-aged (44 <= age <= 64)'] += 1
-    elif int(stringdict[i]['age']) >= 65:
-        agecat['elderly (age >= 65)'] += 1
+                   stringdict[i]['age']])
+    if int(stringdict[i]['age']) < 40:
+        agecat['young (18 <= age < 40)'] += 1
+        age_gendercat['young '+stringdict[i]['gender']] += 1
+    elif (int(stringdict[i]['age']) >= 40 and
+          int(stringdict[i]['age']) < 55):
+        agecat['lower-middle-aged (40 <= age < 55)'] += 1
+        age_gendercat['lower-middle-aged '+stringdict[i]['gender']] += 1
+    elif (int(stringdict[i]['age']) >= 55 and
+          int(stringdict[i]['age']) < 70):
+        agecat['upper-middle-aged (55 <= age < 70)'] += 1
+        age_gendercat['upper-middle-aged '+stringdict[i]['gender']] += 1
+    elif int(stringdict[i]['age']) >= 70:
+        agecat['elderly (age >= 70)'] += 1
+        age_gendercat['elderly '+stringdict[i]['gender']] += 1
     
     # if int(stringdict[i]['age']) <= 39:
     #     agecat['young (18<age<40)'] += 1
@@ -79,7 +85,6 @@ for i in stringdict.keys():
     # elif int(stringdict[i]['age']) >= 60:
     #     agecat['elderly (age>60)'] += 1
         
-    ethnicity[stringdict[i]['declaredethnicGroup']] += 1
     gender[stringdict[i]['gender']] += 1
 
 # for i in range(len(row)):

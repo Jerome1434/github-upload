@@ -9,6 +9,7 @@ import random
 import csv
 import numpy as np
 from collections import Counter
+import matplotlib.pyplot as plt
 
 path = 'C:\\Users\\s144339\\headspaceOnline\\subjects\\'
 
@@ -51,48 +52,63 @@ for i in list(stringdict.keys()):
         stringdict.pop(i)
     elif int(stringdict[i]['age']) < 18:
         stringdict.pop(i)
+    elif stringdict[i]['declaredethnicGroup'] != 'white british':
+        stringdict.pop(i)
 
 gender = Counter()
 agecat = Counter()
-ethnicity = Counter()
+age_gendercat = Counter()
 idlist = list()
+stringdict_grouped = {'young female':{},
+                      'young male':{},
+                      'lower-middle-aged female':{},
+                      'lower-middle-aged male':{},
+                      'upper-middle-aged female':{},
+                      'upper-middle-aged male':{},
+                      'elderly female':{},
+                      'elderly male':{},
+                      'young transgender':{}}
 
 for i in stringdict.keys():
     idlist.append([stringdict[i]['id'], stringdict[i]['gender'], 
-                   stringdict[i]['age'], stringdict[i]['declaredethnicGroup']])
-    if int(stringdict[i]['age']) < 35:
-        agecat['young (18 <= age <= 34)'] += 1
-    elif (int(stringdict[i]['age']) >= 35 and
-          int(stringdict[i]['age']) < 44):
-        agecat['lower-middle-aged (35 <= age <= 43)'] += 1
-    elif (int(stringdict[i]['age']) >= 44 and
-          int(stringdict[i]['age']) < 65):
-        agecat['upper-middle-aged (44 <= age <= 64)'] += 1
-    elif int(stringdict[i]['age']) >= 65:
-        agecat['elderly (age >= 65)'] += 1
-    
-    # if int(stringdict[i]['age']) <= 39:
-    #     agecat['young (18<age<40)'] += 1
-    # elif (int(stringdict[i]['age']) >= 40 and
-    #       int(stringdict[i]['age']) <= 59):
-    #     agecat['middle-aged (40<age<60)'] += 1
-    # elif int(stringdict[i]['age']) >= 60:
-    #     agecat['elderly (age>60)'] += 1
+                   stringdict[i]['age']])
+    if int(stringdict[i]['age']) < 40:
+        agecat['young (18 <= age < 40)'] += 1
+        age_gendercat['young '+stringdict[i]['gender']] += 1
+        stringdict_grouped['young '+stringdict[i]['gender']][i] = stringdict[i]
+    elif (int(stringdict[i]['age']) >= 40 and
+          int(stringdict[i]['age']) < 55):
+        agecat['lower-middle-aged (40 <= age < 55)'] += 1
+        age_gendercat['lower-middle-aged '+stringdict[i]['gender']] += 1
+        stringdict_grouped['lower-middle-aged '+stringdict[i]['gender']][i] = stringdict[i]
+    elif (int(stringdict[i]['age']) >= 55 and
+          int(stringdict[i]['age']) < 70):
+        agecat['upper-middle-aged (55 <= age < 70)'] += 1
+        age_gendercat['upper-middle-aged '+stringdict[i]['gender']] += 1
+        stringdict_grouped['upper-middle-aged '+stringdict[i]['gender']][i] = stringdict[i]
+    elif int(stringdict[i]['age']) >= 70:
+        agecat['elderly (age >= 70)'] += 1
+        age_gendercat['elderly '+stringdict[i]['gender']] += 1
+        stringdict_grouped['elderly '+stringdict[i]['gender']][i] = stringdict[i]
         
-    ethnicity[stringdict[i]['declaredethnicGroup']] += 1
     gender[stringdict[i]['gender']] += 1
 
-# for i in range(len(row)):
-#     temp = row[i]
-#     row[i] = int(temp.replace('"',''))
-# row = np.array(row, dtype='int')
-# stringdictarray = np.zeros(len(stringdict))
-
-# counter = 0
-# for i in list(stringdict):
-#     stringdictarray[counter] = int(stringdict[i]['id'])
-#     counter += 1
-# stringdictarray = stringdictarray.astype(int)
-
-# selection = np.random.choice(stringdictarray, size = 16)
-# selection.sort()
+fig = plt.figure()
+fig.subplots_adjust(hspace=0.4, wspace=0.4)
+# fig,axes = plt.subplots(ncols=len(stringdict_grouped), constrained_layout=True)
+counter = 1
+for i in list(stringdict_grouped):
+    age = []
+    for j in list(stringdict_grouped[i]):
+        age.append(int(stringdict_grouped[i][j]['age']))
+    agerange = max(age) - min(age)
+    if agerange == 0:
+        agerange = 1
+    ax = fig.add_subplot(2, 5, counter)
+    N, bins, patches = ax.hist(age, bins=agerange, density=True)
+    ax.set_title(i+', N='+str(len(age)))
+    ax.set_xlabel('age')
+    ax.set_ylabel('frequency')
+    counter += 1
+fig.set_size_inches([18, 9])
+plt.savefig(os.getcwd()+'\\output\\agedistribution.png', dpi=600)
